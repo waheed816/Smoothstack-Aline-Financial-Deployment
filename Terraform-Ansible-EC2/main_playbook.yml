@@ -1,0 +1,101 @@
+# ---
+# - import_playbook: fetch_terraform_outputs.yml
+
+# - name: Configure Ubuntu server
+#   hosts: localhost
+#   gather_facts: no
+#   tasks:
+#     - name: Check if SSH public key file exists
+#       stat:
+#         path: ~/.ssh/id_rsa.pub
+#       register: ssh_pub_key
+
+#     - name: Fail if SSH public key file does not exist
+#       fail:
+#         msg: "The SSH public key file does not exist at ~/.ssh/id_rsa.pub"
+#       when: not ssh_pub_key.stat.exists
+
+#     - name: Ensure SSH key is present
+#       authorized_key:
+#         user: ubuntu
+#         state: present
+#         key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+#       delegate_to: "{{ hostvars['localhost']['ubuntu_instance_ip'] }}"
+
+#     - name: Install and update OpenSSH and Certbot on Ubuntu
+#       include_tasks: tasks/ubuntu.yml
+#       vars:
+#         ansible_host: "{{ hostvars['localhost']['ubuntu_instance_ip'] }}"
+#         ansible_user: ubuntu
+#         ansible_ssh_private_key_file: "~/ec2-ssh-key-mm.pem"
+
+# - name: Configure RHEL server
+#   hosts: localhost
+#   gather_facts: no
+#   tasks:
+#     - name: Ensure SSH key is present
+#       authorized_key:
+#         user: ec2-user
+#         state: present
+#         key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+#       delegate_to: "{{ hostvars['localhost']['rhel_instance_ip'] }}"
+
+#     - name: Install and update OpenSSH and Certbot on RHEL
+#       include_tasks: tasks/rhel.yml
+#       vars:
+#         ansible_host: "{{ hostvars['localhost']['rhel_instance_ip'] }}"
+#         ansible_user: ec2-user
+#         ansible_ssh_private_key_file: "~/ec2-ssh-key-mm.pem"
+
+# - name: Configure Amazon Linux server
+#   hosts: localhost
+#   gather_facts: no
+#   tasks:
+#     - name: Ensure SSH key is present
+#       authorized_key:
+#         user: ec2-user
+#         state: present
+#         key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+#       delegate_to: "{{ hostvars['localhost']['amazon_linux_instance_ip'] }}"
+
+#     - name: Install and update OpenSSH and Certbot on Amazon Linux
+#       include_tasks: tasks/amazon_linux.yml
+#       vars:
+#         ansible_host: "{{ hostvars['localhost']['amazon_linux_instance_ip'] }}"
+#         ansible_user: ec2-user
+#         ansible_ssh_private_key_file: "~/ec2-ssh-key-mm.pem"
+
+---
+# - import_playbook: fetch_terraform_outputs.yml
+
+- name: Configure Ubuntu server
+  hosts: ubuntu_server
+  gather_facts: no
+  become: yes
+  vars:
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+  tasks:
+    - name: Install and update OpenSSH and Certbot on Ubuntu
+      include_tasks: install_ubuntu.yml
+
+- name: Configure RHEL server
+  hosts: rhel_server
+  gather_facts: no
+  become: yes
+  vars:
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+  tasks:
+    - name: Install and update OpenSSH and Certbot on RHEL
+      include_tasks: install_rhel_pip.yml
+
+- name: Configure Amazon Linux server
+  hosts: amazon_linux_server
+  gather_facts: no
+  become: yes
+  vars:
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+  tasks:
+    - name: Install and update OpenSSH and Certbot on Amazon Linux
+      include_tasks: install_amazon_pip.yml
+
+- import_playbook: installation_summary.yml

@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-portal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: admin-portal
+  template:
+    metadata:
+      labels:
+        app: admin-portal
+    spec:
+      containers:
+        - name: admin-portal
+          image: aline_admin_portal:v0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          env:
+            - name: EXTEND_ESLINT
+              valueFrom:
+                secretKeyRef:
+                  name: admin-portal-secrets
+                  key: EXTEND_ESLINT
+            - name: REACT_APP_API_BASEURL
+              valueFrom:
+                secretKeyRef:
+                  name: admin-portal-secrets
+                  key: REACT_APP_API_BASEURL
+            - name: REACT_APP_TOKEN_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: admin-portal-secrets
+                  key: REACT_APP_TOKEN_NAME
+            - name: REACT_APP_BROKER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: admin-portal-secrets
+                  key: REACT_APP_BROKER_URL
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-portal
+spec:
+  selector:
+    app: admin-portal
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 80
+  type: LoadBalancer

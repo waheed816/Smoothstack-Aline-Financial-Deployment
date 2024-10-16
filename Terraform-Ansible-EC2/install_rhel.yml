@@ -1,0 +1,56 @@
+---
+- name: Install and update OpenSSH and Certbot on RHEL
+  hosts: rhel_servers
+  become: yes
+  tasks:
+    - name: Ensure that the EPEL repository is enabled
+      command: subscription-manager repos --enable "rhel-*-optional-rpms" --enable "rhel-*-extras-rpms" --enable "rhel-ha-for-rhel-*-server-rpms"
+      when: ansible_distribution == "RedHat"
+      ignore_errors: yes
+
+    - name: Check if EPEL repo is available
+      command: yum repolist enabled | grep epel
+      register: epel_repo_check
+      ignore_errors: yes
+
+    - name: Install EPEL repository from URL if not available
+      when: epel_repo_check.rc != 0
+      yum:
+        name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+        state: present
+
+    - name: Update yum repository metadata
+      command: yum makecache
+      ignore_errors: yes
+
+    - name: Install OpenSSH server
+      yum:
+        name: openssh-server
+        state: present
+
+    - name: Install Python3 and pip
+      yum:
+        name:
+          - python3
+          - python3-pip
+        state: present
+
+    - name: Upgrade pip
+      command: python3 -m pip install --upgrade pip
+
+    - name: Install Certbot using pip
+      pip:
+        name: certbot
+
+    - name: Verify Certbot installation
+      command: /usr/local/bin/certbot --version
+      register: certbot_version
+
+    - name: Display Certbot version
+      debug:
+        msg: "Certbot version installed: {{ certbot_version.stdout }}"
+
+    - name: Update OpenSSH server
+      yum:
+        name: openssh-server
+        state: latest

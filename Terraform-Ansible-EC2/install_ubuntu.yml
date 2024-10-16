@@ -1,0 +1,98 @@
+# ---
+# - name: Install update OpenSSH and Certbot on Ubuntu
+#   hosts: ubuntu_servers
+#   become: yes
+#   tasks:
+#     - name: Update apt cache
+#       apt:
+#         update_cache: yes
+
+#     - name: Install OpenSSH server
+#       apt:
+#         name: openssh-server
+#         state: present
+
+#     - name: Install Certbot
+#       apt:
+#         name: certbot
+#         state: present
+
+#     - name: Update OpenSSH server
+#       apt:
+#         name: openssh-server
+#         state: latest
+
+#     - name: Update Certbot
+#       apt:
+#         name: certbot
+#         state: latest
+
+#     - name: Gather OpenSSH version
+#       shell: ssh -V 2>&1
+#       register: openssh_version_output
+#       ignore_errors: yes
+
+#     - name: Gather Certbot version
+#       shell: certbot --version
+#       register: certbot_version_output
+#       ignore_errors: yes
+
+#     - name: Display OpenSSH version
+#       debug:
+#         msg: "OpenSSH version: {{ openssh_version_output.stdout }}"
+
+
+#     - name: Display Certbot version
+#       debug:
+#         msg: "Certbot version: {{ certbot_version_output.stdout }}"
+
+---
+- name: Update apt cache on Ubuntu
+  apt:
+    update_cache: yes
+
+- name: Install OpenSSH server on Ubuntu
+  apt:
+    name: openssh-server
+    state: present
+    force_apt_get: yes
+    install_recommends: no
+
+- name: Install Certbot on Ubuntu
+  apt:
+    name: certbot
+    state: present
+    force_apt_get: yes
+    install_recommends: no
+
+- name: Update OpenSSH server on Ubuntu
+  apt:
+    name: openssh-server
+    state: latest
+    force_apt_get: yes
+    install_recommends: no
+
+- name: Update Certbot on Ubuntu
+  apt:
+    name: certbot
+    state: latest
+    force_apt_get: yes
+    install_recommends: no
+
+- name: Gather OpenSSH version on Ubuntu
+  shell: ssh -V 2>&1
+  register: openssh_version_output
+
+- name: Gather Certbot version on Ubuntu
+  shell: certbot --version
+  register: certbot_version_output
+
+# - name: Set fact for OpenSSH version
+#   set_fact:
+#     ubuntu_openssh_version: "{{ openssh_version_output.stdout }}"
+#   become: yes
+
+# - name: Set fact for Certbot version
+#   set_fact:
+#     ubuntu_certbot_version: "{{ certbot_version_output.stdout }}"
+#   become: yes

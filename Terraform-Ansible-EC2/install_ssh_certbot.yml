@@ -1,0 +1,100 @@
+# ---
+# - hosts: all
+#   become: yes
+#   vars:
+#     ansible_ssh_private_key_file: ~/ec2-ssh-key-mm.pem
+#   tasks:
+#     - name: Install OpenSSH on Debian/Ubuntu
+#       apt:
+#         name: openssh-server
+#         state: present
+#       when: ansible_os_family == "Debian"
+
+#     - name: Install Certbot on Debian/Ubuntu
+#       apt:
+#         name: certbot
+#         state: present
+#       when: ansible_os_family == "Debian"
+
+#     - name: Install OpenSSH on RedHat/CentOS
+#       yum:
+#         name: openssh-server
+#         state: present
+#       when: ansible_os_family == "RedHat"
+
+#     - name: Install Certbot on RedHat/CentOS
+#       yum:
+#         name: certbot
+#         state: present
+#       when: ansible_os_family == "RedHat"
+
+#     - name: Install OpenSSH on Amazon Linux
+#       package:
+#         name: openssh
+#         state: present
+#       when: ansible_os_family == "Amazon"
+
+#     - name: Install Certbot on Amazon Linux
+#       package:
+#         name: certbot
+#         state: present
+#       when: ansible_os_family == "Amazon"
+
+---
+- hosts: all
+  become: yes
+  vars:
+    ansible_ssh_private_key_file: ~/ec2-ssh-key-mm.pem
+
+  tasks:
+    - name: Install OpenSSH on Debian/Ubuntu
+      apt:
+        name: openssh-server
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Install snapd on Debian/Ubuntu
+      apt:
+        name: snapd
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Install Certbot using snap on Debian/Ubuntu
+      snap:
+        name: certbot
+        classic: true
+      when: ansible_os_family == "Debian"
+
+    - name: Install OpenSSH on RedHat/CentOS
+      yum:
+        name: openssh-server
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Install EPEL repository on RedHat/CentOS
+      yum:
+        name: epel-release
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Install Certbot on RedHat/CentOS
+      yum:
+        name: certbot
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Install OpenSSH on Amazon Linux
+      package:
+        name: openssh-server
+        state: present
+      when: ansible_os_family == "Amazon"
+
+    - name: Enable EPEL on Amazon Linux
+      command: amazon-linux-extras enable epel
+      when: ansible_os_family == "Amazon"
+
+    - name: Install Certbot on Amazon Linux
+      yum:
+        name: certbot
+        state: present
+      when: ansible_os_family == "Amazon"

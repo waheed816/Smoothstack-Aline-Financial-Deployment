@@ -1,0 +1,62 @@
+# ---
+# - name: Fetch Terraform outputs
+#   hosts: localhost
+#   gather_facts: no
+#   tasks:
+#     - name: Get Terraform outputs
+#       command: terraform output -json
+#       register: terraform_output
+
+#     - name: Set fact for ubuntu instance IP
+#       set_fact:
+#         ubuntu_instance_ip: "{{ terraform_output.stdout | from_json | json_query('ubuntu_instance_ip.value') }}"
+
+#     - name: Set fact for rhel instance IP
+#       set_fact:
+#         rhel_instance_ip: "{{ terraform_output.stdout | from_json | json_query('rhel_instance_ip.value') }}"
+
+#     - name: Set fact for amazon linux instance IP
+#       set_fact:
+#         amazon_linux_instance_ip: "{{ terraform_output.stdout | from_json | json_query('amazon_linux_instance_ip.value') }}"
+
+---
+- name: Fetch Terraform outputs
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Get Terraform outputs
+      command: terraform output -json
+      register: terraform_output
+
+    - name: Set fact for ubuntu instance IP
+      set_fact:
+        ubuntu_instance_ip: "{{ terraform_output.stdout | from_json | json_query('ubuntu_instance_ip.value') }}"
+
+    - name: Set fact for rhel instance IP
+      set_fact:
+        rhel_instance_ip: "{{ terraform_output.stdout | from_json | json_query('rhel_instance_ip.value') }}"
+
+    - name: Set fact for amazon linux instance IP
+      set_fact:
+        amazon_linux_instance_ip: "{{ terraform_output.stdout | from_json | json_query('amazon_linux_instance_ip.value') }}"
+
+    - name: Add Ubuntu host to inventory
+      add_host:
+        name: ubuntu_server
+        ansible_host: "{{ ubuntu_instance_ip }}"
+        ansible_user: ubuntu
+        ansible_ssh_private_key_file: "~/ec2-ssh-key-mm.pem"
+
+    - name: Add RHEL host to inventory
+      add_host:
+        name: rhel_server
+        ansible_host: "{{ rhel_instance_ip }}"
+        ansible_user: ec2-user
+        ansible_ssh_private_key_file: "~/ec2-ssh-key-mm.pem"
+
+    - name: Add Amazon Linux host to inventory
+      add_host:
+        name: amazon_linux_server
+        ansible_host: "{{ amazon_linux_instance_ip }}"
+        ansible_user: ec2-user
+        ansible_ssh_private_key_file: "~/ec2-ssh-key-mm.pem"

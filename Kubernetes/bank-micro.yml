@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bank-micro
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bank-micro
+  template:
+    metadata:
+      labels:
+        app: bank-micro
+    spec:
+      containers:
+        - name: bank-micro
+          image: bank_micro:v2
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: DB_HOST
+              value: aline-mysql
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secrets
+                  key: MYSQL_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secrets
+                  key: MYSQL_PASSWORD
+          ports:
+            - containerPort: 8083
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bank-micro
+spec:
+  type: LoadBalancer
+  selector:
+    app: bank-micro
+  ports:
+    - protocol: TCP
+      port: 8083
+      targetPort: 8083

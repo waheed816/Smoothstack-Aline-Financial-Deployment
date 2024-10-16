@@ -1,0 +1,225 @@
+pipeline {
+    agent any
+    environment {
+        AWS_DEFAULT_REGION='us-east-1'
+        AWS_CREDS=credentials('aline-aws-creds')
+    }
+    stages {
+        stage('Deploy Application on AWS EKS') {
+            steps {
+                git branch: 'development', credentialsId: 'gitlab-credentials', url: 'https://git1.smoothstack.com/cohorts/2024/2024-03-11_cloud/organizations/deployment-dragons/mehedi-meem/aline-financial-project-mm'
+                sh '''
+                    aws --version
+                    aws eks --region us-east-1 update-kubeconfig --name eks-cluster-mm
+                    aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 767397723308.dkr.ecr.us-east-1.amazonaws.com
+                '''
+                dir('Kubernetes-AWS') {
+                    sh '''
+                        kubectl version --client
+                        kubectl apply -f kubernetes-secrets-aws.yml
+                        kubectl apply -f user-micro-aws.yaml
+                        kubectl apply -f underwriter-micro-aws.yml
+                        kubectl apply -f bank-micro-aws.yml
+                        kubectl apply -f account-micro-aws.yml
+                        kubectl apply -f transaction-micro-aws.yml
+                        kubectl apply -f app-service-host-aws.yml
+                        kubectl apply -f gateway-aws.yml
+                        kubectl apply -f admin-portal-aws.yml
+                        kubectl apply -f landing-portal-aws.yml
+                        kubectl apply -f member-dashboard-aws.yml
+                    '''
+                }
+
+                script {
+                    def services = ['aline-gateway', 'admin-portal', 'landing-portal', 'member-dashboard']
+                    def externalIps = [:] // Dictionary to store external IPs
+                    def maxRetries = 13 // Maximum number of retries
+                    def waitTime = 13 // Wait time between retries in seconds
+
+                    // Iterate through each service to get its external IP
+                    services.each { service ->
+                        def externalIp = ''
+                        def port = ''
+                        for (int i = 0; i < maxRetries; i++) {
+                            // Try to get the external IP or hostname
+                            externalIp = sh(script: "kubectl get service ${service} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'", returnStdout: true).trim()
+
+                            if (externalIp) {
+                                break // Break the loop if the IP is found
+                            }
+                            echo "Waiting for external IP for service ${service}... (${i + 1}/${maxRetries})"
+                            sleep(waitTime) // Wait before retrying
+                        }
+                        if (!externalIp) {
+                            error "Failed to get external IP for service ${service} after ${maxRetries * waitTime} seconds."
+                        }
+
+                        // Get the port for the service
+                        port = sh(script: "kubectl get service ${service} -o jsonpath='{.spec.ports[0].port}'", returnStdout: true).trim()
+                        if (!port) {
+                            error "Failed to get port for service ${service}."
+                        }
+
+                        // Construct the final URL
+                        def serviceUrl = "http://${externalIp}:${port}"
+                        echo "${service} URL: ${serviceUrl}"
+                        externalIps[service] = serviceUrl // Store the URL in the dictionary
+                    }
+
+                    // Storing each external URL in a separate environment variable
+                    externalIps.each { service, url ->
+                        env."${service.toUpperCase().replace('-', '_')}_URL" = url
+                    }
+
+                    // Print the external URLs for each service
+                    echo "Gateway URL: ${env.ALINE_GATEWAY_URL}"
+                    echo "Admin Portal URL: ${env.ADMIN_PORTAL_URL}"
+                    echo "Landing Portal URL: ${env.LANDING_PORTAL_URL}"
+                    echo "Member Dashboard URL: ${env.MEMBER_DASHBOARD_URL}"
+                }
+
+                // Save the load balancer environment variables to a file
+                sh '''
+                    echo "ALINE_GATEWAY_IP=${ALINE_GATEWAY_URL}" > env.txt
+                    echo "ADMIN_PORTAL_IP=${ADMIN_PORTAL_URL}" >> env.txt
+                    echo "LANDING_PORTAL_IP=${LANDING_PORTAL_URL}" >> env.txt
+                    echo "MEMBER_DASHBOARD_IP=${MEMBER_DASHBOARD_URL}" >> env.txt
+                '''
+
+                //Archive the env.txt as an artifact to use them in different pipelines
+                archiveArtifacts artifacts: 'env.txt', allowEmptyArchive: false
+
+                // Print the environment variables file
+                sh '''
+                    cat env.txt
+                '''
+
+                script {
+                    def envMap = readProperties file: 'env.txt'
+                    def landingPortalUrl = envMap['LANDING_PORTAL_IP']
+                    def gatewayUrl = envMap['ALINE_GATEWAY_IP']
+                    def memberDashboardUrl = envMap['MEMBER_DASHBOARD_IP']
+                    def adminPortalUrl = envMap['ADMIN_PORTAL_IP']
+                    def appServiceHost = 'http://app-service-host-aws.default.svc.cluster.local'
+
+                    // Print the variables
+                    envMap.each { key, value ->
+                        echo "${key}: ${value}"
+                    }
+
+                    dir('Kubernetes-AWS'){
+
+                        script{
+
+                            def kubernetesSecrets = readYaml file: 'kubernetes-secrets-aws.yml'
+
+                            def gatewaySecrets = kubernetesSecrets.find { it.metadata.name == 'gateway-secrets' }
+
+                            // Update the values in the secrets file
+                            gatewaySecrets.stringData.PORTAL_LANDING = landingPortalUrl
+                            gatewaySecrets.stringData.PORTAL_DASHBOARD = memberDashboardUrl
+                            gatewaySecrets.stringData.PORTAL_ADMIN = adminPortalUrl
+
+                            def filePath = 'updated-gateway-secrets-aws.yml'
+
+                            if (fileExists(filePath)) {
+                                sh "rm ${filePath}"
+                            }
+
+                            // Write updated YAML to file
+                            writeYaml file: 'updated-gateway-secrets-aws.yml', data: gatewaySecrets
+
+                            // Apply the updated secrets
+                            sh 'kubectl apply -f updated-gateway-secrets-aws.yml'
+                            sh 'kubectl delete deployment aline-gateway'
+                            sh 'kubectl apply -f gateway-aws.yml'
+
+                        }
+                    }
+
+                    //Run docker build for admin portal with new env variables
+                    dir('aline-admin-portal'){
+                        sh """
+                            docker build --build-arg APP_BROKER_URL=${landingPortalUrl} \
+                                         --build-arg APP_API_URL=${gatewayUrl} \
+                                         -t aline-admin-portal:latest .
+                        """
+                    }
+
+                    // Update environment.prod.ts file for member-dashboard and run docker build
+                    dir('member-dashboard'){
+
+                        def envFilePath = 'src/environments/environment.prod.ts'
+                        //Delete the original environment.prod.ts file
+                        sh "rm -f ${envFilePath}"
+
+                        // Create the new environment.prod.ts file with updated content
+                        def envFileContent = """
+                            export const environment = {
+                              production: true,
+                              application: {
+                                api: '${gatewayUrl}/api',
+                                landingPortal: '${landingPortalUrl}'
+                              }
+                            };
+                        """
+                        writeFile file: envFilePath, text: envFileContent
+
+                        // Display the file contents
+                        sh "cat ${envFilePath}"
+
+                        sh """
+                            docker build -t aline-member-dashboard:latest .
+                        """
+                    }
+
+                    dir('aline-landing-portal'){
+                        sh """
+                            docker build --build-arg APP_MEMBER_DASHBOARD_URL=${memberDashboardUrl} \
+                                         --build-arg APP_API_URL=${gatewayUrl} \
+                                         -t aline-landing-portal:latest .
+                        """
+                    }
+                }
+
+                sh """
+                    aws ecr batch-delete-image --repository-name aline-financial-mm --image-ids imageTag=aline-admin-portal-latest || true
+                    aws ecr batch-delete-image --repository-name aline-financial-mm --image-ids imageTag=aline-member-dashboard-latest || true
+                    aws ecr batch-delete-image --repository-name aline-financial-mm --image-ids imageTag=aline-landing-portal-latest || true
+                """
+
+                sh "sleep 31"
+
+                //Push updated docker images to ECR and delete deployments that ran with old image
+                sh """
+                    docker tag aline-admin-portal:latest 767397723308.dkr.ecr.us-east-1.amazonaws.com/aline-financial-mm:aline-admin-portal-latest
+                    docker push 767397723308.dkr.ecr.us-east-1.amazonaws.com/aline-financial-mm:aline-admin-portal-latest
+
+                    docker tag aline-member-dashboard:latest 767397723308.dkr.ecr.us-east-1.amazonaws.com/aline-financial-mm:aline-member-dashboard-latest
+                    docker push 767397723308.dkr.ecr.us-east-1.amazonaws.com/aline-financial-mm:aline-member-dashboard-latest
+
+                    docker tag aline-landing-portal:latest 767397723308.dkr.ecr.us-east-1.amazonaws.com/aline-financial-mm:aline-landing-portal-latest
+                    docker push 767397723308.dkr.ecr.us-east-1.amazonaws.com/aline-financial-mm:aline-landing-portal-latest
+
+                    kubectl delete deployment admin-portal
+                    kubectl delete deployment member-dashboard
+                    kubectl delete deployment landing-portal
+
+                """
+
+                //Wait for deployments to delete
+                sh "sleep 31"
+
+                //Redeploy
+                dir('Kubernetes-AWS') {
+                    sh '''
+                        kubectl apply -f admin-portal-aws.yml
+                        kubectl apply -f landing-portal-aws.yml
+                        kubectl apply -f member-dashboard-aws.yml
+                    '''
+                }
+
+            }
+        }
+    }
+}

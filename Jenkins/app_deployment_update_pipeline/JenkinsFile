@@ -1,0 +1,214 @@
+pipeline {
+    agent any
+
+    environment {
+        JENKINS_URL = 'http://52.0.102.84:8080'
+        JOB_NAME = 'AWS-Pipeline'
+        ARTIFACT_PATH = 'env.txt'
+        AWS_DEFAULT_REGION='us-east-1'
+        AWS_CREDS=credentials('aline-aws-creds')
+        GITLAB_URL = 'https://git1.smoothstack.com/cohorts/2024/2024-03-11_cloud/organizations/deployment-dragons/mehedi-meem/aline-financial-project-mm'
+    }
+
+    stages {
+
+        stage('access gitlab, eks and ecr'){
+            steps{
+                git branch: 'development', credentialsId: 'gitlab-credentials', url: "${GITLAB_URL}"
+
+                sh '''
+                        aws --version
+                        aws eks --region us-east-1 update-kubeconfig --name eks-cluster-mm
+                        aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 767397723308.dkr.ecr.us-east-1.amazonaws.com
+                '''
+            }
+        }
+
+        stage('Download and Use env.txt') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: 'JenkinsCreds', usernameVariable: 'JENKINS_USER', passwordVariable: 'JENKINS_PASS')]) {
+                        def jenkinsUrl = "${env.JENKINS_URL}/job/${env.JOB_NAME}/lastSuccessfulBuild/artifact/${env.ARTIFACT_PATH}"
+
+                        // Download the artifact using curl with username and password
+                        sh """
+                            curl -u ${JENKINS_USER}:${JENKINS_PASS} -o env.txt ${jenkinsUrl}
+                        """
+
+                        // Verify the file was downloaded
+                        sh 'cat env.txt'
+
+                        // Read properties from env.txt and set them as environment variables
+                        def envMap = readProperties file: 'env.txt'
+                        env.LANDING_PORTAL_URL = envMap['LANDING_PORTAL_IP']
+                        env.GATEWAY_URL = envMap['ALINE_GATEWAY_IP']
+                        env.MEMBER_DASHBOARD_URL = envMap['MEMBER_DASHBOARD_IP']
+                        env.ADMIN_PORTAL_URL = envMap['ADMIN_PORTAL_IP']
+                    }
+                }
+            }
+        }
+
+
+        stage('changes to user microservice') {
+
+            when { changeset "aline-user-microservice/**"}
+
+            steps{
+
+                script {
+                    echo 'Detected changes in aline-user-microservice directory.'
+                }
+            }
+        }
+
+
+        stage('changes to bank microservice') {
+
+            when { changeset "aline-bank-microservice/**"}
+
+            steps{
+
+                script {
+                    echo 'Detected changes in aline-bank-microservice directory.'
+                }
+            }
+        }
+
+
+        stage('changes to underwriter microservice') {
+
+            when { changeset "aline-underwriter-microservice/**"}
+
+            steps{
+
+                script {
+                    echo 'Detected changes in aline-underwriter-microservice directory.'
+                }
+            }
+        }
+
+
+        stage('changes to account microservice') {
+
+            when { changeset "aline-account-microservice/**"}
+
+            steps{
+
+                script {
+                    echo 'Detected changes in aline-account-microservice directory.'
+                }
+            }
+        }
+
+
+        stage('changes to transaction microservice') {
+
+            when { changeset "aline-transaction-microservice/**"}
+
+            steps{
+
+                script {
+                    echo 'Detected changes in aline-transaction-microservice directory.'
+                }
+            }
+        }
+
+
+        stage('changes to gateway') {
+
+            when { changeset "aline-gateway/**"}
+
+            steps{
+
+                script {
+                    echo 'Detected changes in aline-gateway directory.'
+                }
+            }
+        }
+
+
+        stage('changes to admin-portal') {
+
+            when { changeset "aline-admin-portal/**"}
+
+            steps{
+
+                script {
+                    echo 'Detected changes in aline-admin-portal directory.'
+                }
+            }
+        }
+
+
+        stage('changes to member-dashboard') {
+
+            when { changeset "member-dashboard/**"}
+
+            steps{
+
+                script {
+                    echo 'Detected changes in member-dashboard directory.'
+                }
+            }
+        }
+
+
+        stage('changes to landing-portal') {
+
+            when { changeset "aline-landing-portal/**"}
+
+            steps{
+                script {
+                    echo 'Detected changes in landing-portal directory.'
+                }
+
+                dir('aline-landing-portal'){
+                    sh """
+                        docker build --build-arg APP_MEMBER_DASHBOARD_URL=${env.MEMBER_DASHBOARD_URL} \
+                                     --build-arg APP_API_URL=${env.GATEWAY_URL} \
+                                     -t aline-landing-portal:latest .
+                    """
+                }
+
+                sh "aws ecr batch-delete-image --repository-name aline-financial-mm --image-ids imageTag=aline-landing-portal-latest || true"
+
+
+                sh '''
+                        docker tag aline-landing-portal:latest 767397723308.dkr.ecr.us-east-1.amazonaws.com/aline-financial-mm:aline-landing-portal-latest
+                        docker push 767397723308.dkr.ecr.us-east-1.amazonaws.com/aline-financial-mm:aline-landing-portal-latest
+
+                        kubectl delete deployment landing-portal
+                '''
+
+
+                //Redeploy
+                dir('Kubernetes-AWS') {
+                    sh '''
+                        kubectl apply -f landing-portal-aws.yml
+                    '''
+                }
+
+            }
+
+        }
+    }
+    //Post actions to perform after the pipeline completes
+    post {
+        always {
+            // Clean up the workspace
+            cleanWs()
+            script {
+                //def recipients = readFile(env.EMAIL_RECIPIENTS_FILE).trim().split('\n')
+
+                emailext subject: "Pipeline Notification - ${currentBuild.result}",
+                         body: "Pipeline completed with ${currentBuild.result}: ${env.BUILD_URL}",
+                         //to: recipients.join(','),
+                         to: "waheed816.jenkins@gmail.com",
+                         attachLog: true,
+                         mimeType: 'text/html',
+                         replyTo: "waheed816.jenkins@gmail.com"
+            }
+        }
+    }
+}

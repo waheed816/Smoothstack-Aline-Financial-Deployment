@@ -1,0 +1,48 @@
+---
+- name: Update yum cache on RHEL
+  yum:
+    update_cache: yes
+
+- name: Install OpenSSH server on RHEL
+  yum:
+    name: openssh-server
+    state: present
+    enablerepo: "*"
+    update_cache: yes
+
+- name: Install Python3 and pip on RHEL
+  yum:
+    name:
+      - python3
+      - python3-pip
+    state: present
+    enablerepo: "*"
+    update_cache: yes
+
+
+- name: Install Certbot using pip on RHEL
+  pip:
+    name: certbot
+
+
+- name: Update OpenSSH server on RHEL
+  yum:
+    name: openssh-server
+    state: latest
+    enablerepo: "*"
+    update_cache: yes
+
+- name: Update Certbot using pip on RHEL
+  pip:
+    name: certbot
+    state: latest
+
+
+- name: Gather OpenSSH version on RHEL
+  shell: ssh -V 2>&1
+  register: openssh_version_output
+
+
+- name: Verify Certbot installation on RHEL
+  command: /usr/local/bin/certbot --version
+  register: certbot_version_output

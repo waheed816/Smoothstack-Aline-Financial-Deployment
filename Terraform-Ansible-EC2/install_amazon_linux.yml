@@ -1,0 +1,123 @@
+# ---
+# - name: Install and update OpenSSH and Certbot on Amazon Linux
+#   hosts: amazon_linux_servers
+#   become: yes
+#   tasks:
+#     - name: Gather os-release info
+#       command: cat /etc/os-release
+#       register: os_release
+
+#     - name: Debug os-release content
+#       debug:
+#         msg: "{{ os_release.stdout_lines }}"
+
+#     - name: Ensure 'amazon-linux-extras' is installed on Amazon Linux 2
+#       when: "'Amazon Linux' in os_release.stdout and '2' in os_release.stdout"
+#       yum:
+#         name: amazon-linux-extras
+#         state: present
+
+#     - name: Enable EPEL repository on Amazon Linux 2
+#       when: "'Amazon Linux' in os_release.stdout and '2' in os_release.stdout"
+#       command: amazon-linux-extras install epel -y
+
+#     - name: Enable EPEL repository using yum-config-manager on non-Amazon Linux 2
+#       when: "'Amazon Linux' in os_release.stdout and '2' not in os_release.stdout"
+#       command: yum-config-manager --enable epel
+#       ignore_errors: yes
+
+#     - name: Install EPEL using yum on other Amazon Linux
+#       when: "'Amazon Linux' in os_release.stdout and '2' not in os_release.stdout"
+#       yum:
+#         name: epel-release
+#         state: present
+
+#     - name: Install OpenSSH server
+#       yum:
+#         name: openssh-server
+#         state: present
+
+#     - name: Install Certbot
+#       yum:
+#         name: certbot
+#         state: present
+
+#     - name: Update OpenSSH server
+#       yum:
+#         name: openssh-server
+#         state: latest
+
+#     - name: Update Certbot
+#       yum:
+#         name: certbot
+#         state: latest
+
+---
+- name: Install and update OpenSSH and Certbot on Amazon Linux
+  hosts: amazon_linux_servers
+  become: yes
+  tasks:
+    - name: Gather os-release info
+      command: cat /etc/os-release
+      register: os_release
+
+    - name: Debug os-release content
+      debug:
+        msg: "{{ os_release.stdout_lines }}"
+
+    # - name: Ensure EPEL repository is enabled on Amazon Linux 2023
+    #   when: "'Amazon Linux' in os_release.stdout and '2023' in os_release.stdout"
+    #   command: dnf install -y epel-release
+
+    # - name: Ensure EPEL repository is enabled on Amazon Linux 2
+    #   when: "'Amazon Linux' in os_release.stdout and '2' in os_release.stdout"
+    #   command: amazon-linux-extras install epel -y
+
+    - name: Enable EPEL repository using yum-config-manager on non-Amazon Linux 2 or 2023
+      when: "'Amazon Linux' in os_release.stdout and '2' not in os_release.stdout and '2023' not in os_release.stdout"
+      command: yum-config-manager --enable epel
+      ignore_errors: yes
+
+    - name: Install EPEL using yum on other Amazon Linux
+      when: "'Amazon Linux' in os_release.stdout and '2' not in os_release.stdout and '2023' not in os_release.stdout"
+      yum:
+        name: epel-release
+        state: present
+
+    - name: Install OpenSSH server
+      yum:
+        name: openssh-server
+        state: present
+
+    - name: Install Certbot
+      yum:
+        name: certbot
+        state: present
+
+    - name: Update OpenSSH server
+      yum:
+        name: openssh-server
+        state: latest
+
+    - name: Update Certbot
+      yum:
+        name: certbot
+        state: latest
+
+    - name: Gather OpenSSH version
+      shell: ssh -V 2>&1
+      register: openssh_version_output
+      ignore_errors: yes
+
+    - name: Display OpenSSH version
+      debug:
+        msg: "OpenSSH version: {{ openssh_version_output.stdout }}"
+
+    - name: Gather Certbot version
+      shell: certbot --version
+      register: certbot_version_output
+      ignore_errors: yes
+
+    - name: Display Certbot version
+      debug:
+        msg: "Certbot version: {{ certbot_version_output.stdout }}"

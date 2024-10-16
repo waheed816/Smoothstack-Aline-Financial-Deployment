@@ -1,0 +1,81 @@
+# ---
+# - name: Gather versions from remote hosts
+#   hosts: all
+#   gather_facts: no
+#   tasks:
+#     - name: Set fact for OpenSSH version
+#       set_fact:
+#         openssh_version_fact: "{{ openssh_version_output.stdout }}"
+#         certbot_version_fact: "{{ certbot_version.stdout }}"
+
+# - name: Display installation summary
+#   hosts: localhost
+#   gather_facts: no
+#   tasks:
+#     - name: Collect all versions
+#       set_fact:
+#         linux_openssh_version: "{{ hostvars['amazon_linux_server']['openssh_version_fact'] }}"
+#         linux_certbot_version: "{{ hostvars['amazon_linux_server']['certbot_version_fact'] }}"
+#         rhel_openssh_version: "{{ hostvars['rhel_server']['openssh_version_fact'] }}"
+#         rhel_certbot_version: "{{ hostvars['rhel_server']['certbot_version_fact'] }}"
+#         ubuntu_openssh_version: "{{ hostvars['ubuntu_server']['openssh_version_fact'] }}"
+#         ubuntu_certbot_version: "{{ hostvars['ubuntu_server']['certbot_version_fact'] }}"
+
+#     - name: Display versions
+#       debug:
+#         msg: |
+#           \u001b[1m\u001b[44;37mLinux Server Installation:\u001b[0m
+#               \u001b[1m\u001b[43;37mOpenSSH Version:\u001b[0m \u001b[1m\u001b[42;37m{{ linux_openssh_version.split()[0] }}\u001b[0m
+#               \u001b[1m\u001b[43;37mCertbot Version:\u001b[0m \u001b[1m\u001b[42;37m{{ linux_certbot_version.split()[1] }}\u001b[0m
+
+#           \u001b[1m\u001b[44;37mRhel Server Installation:\u001b[0m
+#               \u001b[1m\u001b[43;37mOpenSSH Version:\u001b[0m \u001b[1m\u001b[42;37m{{ rhel_openssh_version.split()[0] }}\u001b[0m
+#               \u001b[1m\u001b[43;37mCertbot Version:\u001b[0m \u001b[1m\u001b[42;37m{{ rhel_certbot_version.split()[1] }}\u001b[0m
+
+#           \u001b[1m\u001b[44;37mUbuntu Server Installation:\u001b[0m
+#               \u001b[1m\u001b[43;37mOpenSSH Version:\u001b[0m \u001b[1m\u001b[42;37m{{ ubuntu_openssh_version.split()[0] }}\u001b[0m
+#               \u001b[1m\u001b[43;37mCertbot Version:\u001b[0m \u001b[1m\u001b[42;37m{{ ubuntu_certbot_version.split()[1] }}\u001b[0m
+
+---
+- name: Gather installation versions from remote hosts
+  hosts: all
+  gather_facts: no
+  tasks:
+    - name: Set fact for OpenSSH and Certbot versions
+      set_fact:
+        openssh_version_fact: "{{ openssh_version_output.stdout }}"
+        certbot_version_fact: "{{ certbot_version_output.stdout }}"
+
+- name: Display installation summary
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Collect all versions
+      set_fact:
+        linux_openssh_version: "{{ hostvars['amazon_linux_server']['openssh_version_fact'] | default('N/A') }}"
+        linux_certbot_version: "{{ hostvars['amazon_linux_server']['certbot_version_fact'] | default('N/A') }}"
+        rhel_openssh_version: "{{ hostvars['rhel_server']['openssh_version_fact'] | default('N/A') }}"
+        rhel_certbot_version: "{{ hostvars['rhel_server']['certbot_version_fact'] | default('N/A') }}"
+        ubuntu_openssh_version: "{{ hostvars['ubuntu_server']['openssh_version_fact'] | default('N/A') }}"
+        ubuntu_certbot_version: "{{ hostvars['ubuntu_server']['certbot_version_fact'] | default('N/A') }}"
+
+    - name: LINUX SERVER INSTALLATIONS SUMMARY
+      ansible.builtin.debug:
+        msg:
+          - "OpenSSH Version: {{ linux_openssh_version.replace('OpenSSH_', '').split()[0] }}"
+          - "OpenSSL Version: {{ linux_openssh_version.split('OpenSSL ')[1].split()[0] }}"
+          - "Certbot Version: {{ linux_certbot_version.split()[1] }}"
+
+    - name: RHEL SERVER INSTALLATIONS SUMMARY
+      ansible.builtin.debug:
+        msg:
+          - "OpenSSH Version: {{ rhel_openssh_version.replace('OpenSSH_', '').split()[0] }}"
+          - "OpenSSL Version: {{ rhel_openssh_version.split('OpenSSL ')[1].split()[0] }}"
+          - "Certbot Version: {{ rhel_certbot_version.split()[1] }}"
+
+    - name: UBUNTU SERVER INSTALLATIONS SUMMARY
+      ansible.builtin.debug:
+        msg:
+          - "OpenSSH Version: {{ ubuntu_openssh_version.replace('OpenSSH_', '').split()[0] }}"
+          - "OpenSSL Version: {{ ubuntu_openssh_version.split('OpenSSL ')[1].split()[0] }}"
+          - "Certbot Version: {{ ubuntu_certbot_version.split()[1] }}"

@@ -1,0 +1,140 @@
+pipeline {
+    // Define the agent to run the pipeline. 'any' means it can run on any available agent.
+    agent any
+
+    // Pipeline options
+    options {
+        // Disable pipeline resume capability to ensure clean state on every run
+        disableResume()
+    }
+
+    // Define tools needed for the pipeline
+    tools {
+        // Use the Node.js installation labeled "NodeJS-MM"
+        nodejs "NodeJS-MM"
+        maven "mavenInstallation"
+    }
+
+    // Define environment variables
+    environment {
+        // URL of the Git repository
+        REPO_URL = 'https://git1.smoothstack.com/cohorts/2024/2024-03-11_cloud/organizations/deployment-dragons/mehedi-meem/aline-financial-project-mm'
+
+        // Set SonarScanner tool for code quality analysis
+        SONAR_SCANNER_HOME = tool name: 'SonarQubeScanner-MM', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
+
+        // Update PATH to include SonarScanner binary directory
+        PATH = "${env.PATH}:${SONAR_SCANNER_HOME}/bin"
+    }
+
+    stages {
+        // Stage to clone the repository
+        stage('Clone Repository') {
+            steps {
+                // Clone the 'main' branch of the repository using the specified credentials
+                git branch: 'development', url: "${REPO_URL}", credentialsId: 'gitlab-credentials'
+            }
+        }
+
+        // Stage to install Angular CLI
+        // stage('Install Angular CLI') {
+        //     steps {
+        //         // Install Angular CLI globally using npm
+        //         sh 'npm install @angular/cli@12.1.4'
+        //         sh 'npm ls @parcel/watcher'
+        //     }
+        // }
+
+        //Stage to run tests
+        stage('Run Tests') {
+
+            // tools {
+            //     nodejs "NodeJS-18-13-0-MM"
+            // }
+
+            steps {
+                script {
+                    // Define a list of microservices with their names and directories
+                    def microservices = [
+                        [name: 'account-micro-jenkins', dir: 'aline-account-microservice'],
+                        [name: 'bank-micro-jenkins', dir: 'aline-bank-microservice'],
+                        [name: 'aline-gateway-jenkins', dir: 'aline-gateway'],
+                        [name: 'trans-micro-jenkins', dir: 'aline-transaction-microservice'],
+                        [name: 'underwriter-micro-jenkins', dir: 'aline-underwriter-microservice'],
+                        [name: 'user-micro-jenkins', dir: 'aline-user-microservice'],
+                        [name: 'aline-admin-jenkins', dir: 'aline-admin-portal'],
+                        [name: 'aline-landing-jenkins', dir: 'aline-landing-portal'],
+                    ]
+                    // Iterate over each microservice
+                    microservices.each { service ->
+                        dir(service.dir) {
+                            if (service.name in ['aline-admin-jenkins', 'aline-landing-jenkins', 'aline-member-jenkins']) {
+                                // For admin and landing - install npm packages and run tests
+                                sh "rm -rf node_modules package-lock.json"
+                                sh "npm install"
+                                sh "npm test"
+                            }else {
+                                // For other services, run Maven clean test without skipping tests
+                                sh "mvn clean test -DskipTests"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Stage to run SonarQube analysis
+        stage('SonarQube Analysis') {
+
+            tools {
+                nodejs "NodeLTS-MM"
+            }
+
+            steps {
+                script {
+                    // Define the same list of microservices
+                    def microservices = [
+                        [name: 'account-micro-jenkins', dir: 'aline-account-microservice'],
+                        [name: 'bank-micro-jenkins', dir: 'aline-bank-microservice'],
+                        [name: 'aline-gateway-jenkins', dir: 'aline-gateway'],
+                        [name: 'trans-micro-jenkins', dir: 'aline-transaction-microservice'],
+                        [name: 'underwriter-micro-jenkins', dir: 'aline-underwriter-microservice'],
+                        [name: 'user-micro-jenkins', dir: 'aline-user-microservice'],
+                        [name: 'aline-admin-jenkins', dir: 'aline-admin-portal'],
+                        [name: 'aline-landing-jenkins', dir: 'aline-landing-portal'],
+                        [name: 'aline-member-jenkins', dir: 'member-dashboard']
+                    ]
+                    // Iterate over each microservice for SonarQube analysis
+                    microservices.each { service ->
+                        dir(service.dir) {
+                            withSonarQubeEnv('sonrqubealine') {
+                                if (service.name in ['aline-admin-jenkins', 'aline-landing-jenkins', 'aline-member-jenkins']) {
+                                    // Run SonarQube analysis for non-Maven projects (Node.js/Angular)
+                                    sh """
+                                        sonar-scanner \
+                                        -Dsonar.projectKey=${service.name} \
+                                        -Dsonar.sources=.
+                                    """
+                                } else {
+                                    // Run SonarQube analysis for Maven projects
+                                    sh """
+                                        mvn sonar:sonar
+                                    """
+                                }
+                            }
+
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    //Post actions to perform after the pipeline completes
+    post {
+        always {
+            // Clean up the workspace
+            cleanWs()
+        }
+    }
+}

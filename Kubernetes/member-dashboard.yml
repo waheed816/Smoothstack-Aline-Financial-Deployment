@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: member-dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: member-dashboard
+  template:
+    metadata:
+      labels:
+        app: member-dashboard
+    spec:
+      containers:
+        - name: member-dashboard
+          image: aline_member_dashboard:v2
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4200
+          env:
+            - name: api
+              valueFrom:
+                secretKeyRef:
+                  name: member-dashboard-secrets
+                  key: api
+            - name: landingPortal
+              valueFrom:
+                secretKeyRef:
+                  name: member-dashboard-secrets
+                  key: landingPortal
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: member-dashboard
+spec:
+  selector:
+    app: member-dashboard
+  ports:
+    - protocol: TCP
+      port: 4200
+      targetPort: 80
+  type: LoadBalancer

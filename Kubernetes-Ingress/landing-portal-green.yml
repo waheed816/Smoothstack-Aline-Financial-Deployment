@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: landing-portal-green
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: landing-portal-green
+  template:
+    metadata:
+      labels:
+        app: landing-portal-green
+    spec:
+      containers:
+        - name: landing-portal-green
+          image: 767397723308.dkr.ecr.us-east-1.amazonaws.com/aline-financial-mm:aline-landing-portal-green-latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3007
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: landing-portal
+spec:
+  selector:
+    app: landing-portal-green
+  ports:
+    - protocol: TCP
+      port: 3007
+      targetPort: 80
+  type: ClusterIP

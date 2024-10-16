@@ -1,0 +1,51 @@
+---
+
+- name: Update yum cache on Linux
+  yum:
+    update_cache: yes
+
+- name: Install OpenSSH server on Linux
+  yum:
+    name: openssh-server
+    state: present
+    enablerepo: "*"
+    update_cache: yes
+
+- name: Install Python3 and pip on Linux
+  yum:
+    name:
+      - python3
+      - python3-pip
+    state: present
+    enablerepo: "*"
+    update_cache: yes
+
+- name: Install Certbot using pip on Linux
+  command: python3 -m pip install certbot
+
+
+- name: Update OpenSSH server on Linux
+  yum:
+    name: openssh-server
+    state: latest
+
+- name: Update Certbot using pip on Linux
+  command: python3 -m pip install --upgrade certbot
+
+- name: Gather OpenSSH version on Linux
+  shell: ssh -V 2>&1
+  register: openssh_version_output
+
+- name: Verify Certbot installation on Linux
+  command: certbot --version
+  register: certbot_version_output
+
+# - name: Set fact for OpenSSH version
+#   set_fact:
+#     linux_openssh_version: "{{ openssh_version_output.stdout }}"
+#   become: yes
+
+# - name: Set fact for Certbot version
+#   set_fact:
+#     linux_certbot_version: "{{ certbot_version_output.stdout }}"
+#   become: yes
